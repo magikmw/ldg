@@ -94,17 +94,18 @@ SCREEN_HEIGHT = 64
 
 #on-screen map size within above
 MAP_WIDTH = 18
-MAP_HEIGHT = 62
+MAP_HEIGHT = 60
 
 #info panel size
 PANEL_HEIGHT = 2
 
 #Colors
 color_ground_f = libtcod.white
-color_ground_b = libtcod.black
-color_wall_f = libtcod.white
-color_wall_b = libtcod.black
-color_player = libtcod.light_blue
+color_ground_b = libtcod.grey * 0.3
+color_wall_f = libtcod.light_blue * libtcod.silver * 1.5
+color_wall_b = libtcod.grey * 0.3
+color_player = libtcod.green
+color_cannons = libtcod.yellow * libtcod.red * 1.5
 
 logg.info('Constants initialization finished.')
 
@@ -133,8 +134,9 @@ class Gamestate():
         logg.debug('Drawing console initialization.')
         self.con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
         #bottom panel console
-        logg.debug('Bottom panel console initialization.')
-        self.panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
+        logg.debug('Panels console initialization.')
+        self.top_panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
+        self.bottom_panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
 
         logg.debug('Gamestate variables initialization')
         self.entities=[]
@@ -172,14 +174,14 @@ class Gamestate():
                 ent.clear()
 
             #import keys handling
-            player_action = handle_keys()
+            self.player_action = handle_keys()
             if self.player_action == None:
                 self.player_action = 'didnt-take-turn'
             if self.player_action == 'exit': #if pressing a key returns 'exit' - close the window
                 break
 
             #let monsters take their turn
-            if self.gamestate == 'playing' and player_action != 'didnt-take-turn':
+            if self.gamestate == 'playing' and self.player_action != 'didnt-take-turn':
                 for ent in self.entities:
                     if ent.ai:
                         ent.ai.take_turn()
@@ -221,7 +223,7 @@ class Entity():
     def clear(self):
         #clear the sign
         #logg.debug('Method clear() called by %s, pos x: %s, y: %s', self.name, str(self.x), str(self.y))
-        libtcod.console_put_char_ex(Game.con, self.x, self.y, '.', color_ground_f, color_ground_b)
+        libtcod.console_put_char_ex(Game.con, self.x, self.y, ' ', color_ground_f, color_ground_b)
 
 logg.debug('Entity initialized.')
 
@@ -242,7 +244,7 @@ def render_all():
             if wall:
                 libtcod.console_put_char_ex(Game.con, x, y, '#', color_wall_f, color_wall_b)
             else:
-                libtcod.console_put_char_ex(Game.con, x, y, '.', color_ground_f, color_ground_b)
+                libtcod.console_put_char_ex(Game.con, x, y, ' ', color_ground_f, color_ground_b)
 
     #draw all objects in the list, except the player that is drawn AFTER everything else
     for ent in Game.entities:
@@ -251,7 +253,17 @@ def render_all():
     Game.player.draw()
 
     #blit the contents of "con" to the root console
-    libtcod.console_blit(Game.con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
+    libtcod.console_blit(Game.con, 0, 0, SCREEN_WIDTH, MAP_HEIGHT, 0, 0, 2)
+
+    libtcod.console_print_ex(Game.top_panel, SCREEN_WIDTH/2, 0, libtcod.BKGND_NONE, libtcod.CENTER, GAME_TITLE)
+    libtcod.console_print_ex(Game.top_panel, SCREEN_WIDTH/2, 1, libtcod.BKGND_NONE, libtcod.CENTER, 'v.' + VERSION + ' by magikmw')
+
+    libtcod.console_blit(Game.top_panel, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
+
+    libtcod.console_print_ex(Game.bottom_panel, SCREEN_WIDTH/2, 0, libtcod.BKGND_NONE, libtcod.CENTER, "Stage 14")
+    libtcod.console_print_ex(Game.bottom_panel, 0, 1, libtcod.BKGND_NONE, libtcod.LEFT, "Magikmw: " + "3000 pts")
+
+    libtcod.console_blit(Game.bottom_panel, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, MAP_HEIGHT+2)
 
 def make_map():
     #logg.debug('make_map() called')
@@ -260,6 +272,18 @@ def make_map():
     Game.map = [[ Tile()
         for y in range(MAP_HEIGHT) ]
             for x in range(MAP_WIDTH) ]
+
+    for y in range(MAP_HEIGHT):
+        Game.map[0][y].blocked = True
+        Game.map[17][y].blocked = True
+
+    for x in range(MAP_WIDTH):
+        Game.map[x][0].blocked = True
+        Game.map[x][59].blocked = True
+
+    for z in range(16):
+        lazor = Entity(z+1, 1, "laz0r", '^', color_cannons, True, ai=None)
+        Game.entities.append(lazor)
 
 def handle_keys():
     key = libtcod.Key()
@@ -298,6 +322,10 @@ def handle_keys():
 
         else:
             #test for other keys
+
+            if key_char == 'P':
+                #screenshot, because I can
+                libtcod.sys_save_screenshot()
 
             if key.vk == libtcod.KEY_F1:
                 help_screen()
