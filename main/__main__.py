@@ -120,7 +120,7 @@ class Gamestate():
         
         logg.info('Main loop initialization.')
 
-        logg.debug('Font size set to 10')
+        logg.debug('Font size set to 8')
         libtcod.console_set_custom_font('main/terminal8x8_gs_ro.png',
             libtcod.FONT_LAYOUT_ASCII_INROW | libtcod.FONT_TYPE_GRAYSCALE)
 
@@ -141,7 +141,7 @@ class Gamestate():
         self.player = None
         self.gamestate = ""
         self.player_action = None
-        self.map = [[]]
+        self.map = None
 
     def main_menu(self):
         """THE main menu, no other."""
@@ -171,6 +171,19 @@ class Gamestate():
             for ent in self.entities:
                 ent.clear()
 
+            #import keys handling
+            player_action = handle_keys()
+            if self.player_action == None:
+                self.player_action = 'didnt-take-turn'
+            if self.player_action == 'exit': #if pressing a key returns 'exit' - close the window
+                break
+
+            #let monsters take their turn
+            if self.gamestate == 'playing' and player_action != 'didnt-take-turn':
+                for ent in self.entities:
+                    if ent.ai:
+                        ent.ai.take_turn()
+
 
 logg.debug('Gamestate initialized.')
 
@@ -183,13 +196,14 @@ logg.debug('Tile initialized.')
 
 class Entity():
     """Any and all entities in the game."""
-    def __init__(self, x, y, name, char, color, blocks=False):
+    def __init__(self, x, y, name, char, color, blocks=False, ai=False):
         self.x = x
         self.y = y
         self.name = name
         self.char = char
         self.color = color
         self.blocks = blocks
+        self.ai = ai
 
     def move(self, dx, dy):
         #logg.debug('move() called, %s, %s', dx, dy)
@@ -202,6 +216,7 @@ class Entity():
         #if visible to the player, or explored and always visible
         #logg.debug('Method draw() called by %s, pos x: %s, y: %s', self.name, str(self.x), str(self.y))
         libtcod.console_set_default_foreground(Game.con, self.color)
+        libtcod.console_put_char(Game.con, self.x, self.y, self.char, libtcod.BKGND_NONE)
         
     def clear(self):
         #clear the sign
@@ -246,12 +261,57 @@ def make_map():
         for y in range(MAP_HEIGHT) ]
             for x in range(MAP_WIDTH) ]
 
+def handle_keys():
+    key = libtcod.Key()
+
+    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS, key, libtcod.Mouse())
+    key_char = chr(key.c)
+
+    if key.vk is not 0:
+        logg.debug('Key pressed: key_char[%s], key.vk[%s].', key_char, key.vk)
+
+    #toggle fullscreen
+    if key.vk == libtcod.KEY_F11:
+        libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+    #exit game
+    elif key.vk == libtcod.KEY_ESCAPE:
+        return 'exit'
+
+    #if the game is playing
+    if Game.gamestate == 'playing':
+        #movement keys
+        #numpad, arrows, vim
+        if key.vk == libtcod.KEY_KP8 or key.vk == libtcod.KEY_UP or key_char == 'k':
+            Game.player.move(0, -1)
+
+        elif key.vk == libtcod.KEY_KP2 or key.vk == libtcod.KEY_DOWN or key_char == 'j':
+            Game.player.move(0, 1)
+
+        elif key.vk == libtcod.KEY_KP4 or key.vk == libtcod.KEY_LEFT or key_char == 'h':
+            Game.player.move(-1, 0)
+
+        elif key.vk == libtcod.KEY_KP6 or key.vk == libtcod.KEY_RIGHT or key_char == 'l':
+            Game.player.move(1, 0)
+
+        elif key.vk == libtcod.KEY_KP5 or key.vk == libtcod.KEY_SPACE or key_char == '.': #KP_5, SPACE, . - wait a turn
+            Game.player.move(0, 0)
+
+        else:
+            #test for other keys
+
+            if key.vk == libtcod.KEY_F1:
+                help_screen()
+
+            return 'didnt-take-turn' #This makes sure that monsters don't take turn if player did not.
+
+logg.debug('handle_keys()')
+
 #function that checks if the tile is blocked
 def is_blocked(x, y):
     #check map tile first
     try:
         #XXX Hack for windows, seems the libtcod.dll is broken and throws up y in range of couple million
-        if map[x][y].blocked:
+        if Game.map[x][y].blocked:
             return True
     except IndexError:
         logg.warn('is_blocked() catched an IndexError with values x: %s and y: %s', str(x), str(y))
@@ -265,6 +325,9 @@ def is_blocked(x, y):
     return False
 
 logg.debug('is_blocked()')
+
+def help_screen():
+    print "This is the halp screen."
 
 logg.info('Functions initialization finished.')
 
