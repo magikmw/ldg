@@ -80,6 +80,7 @@ logg.info('All modules imported succesfully.')
 logg.info('Constants initialization.')
 
 #tile
+WINDOW_TITLE = 'LDG'
 GAME_TITLE = 'Laz0r Dodging Game'
 VERSION = '0.1'
 
@@ -105,6 +106,7 @@ color_ground_b = libtcod.grey * 0.3
 color_wall_f = libtcod.light_blue * libtcod.silver * 1.5
 color_wall_b = libtcod.grey * 0.3
 color_player = libtcod.green
+color_player_dead = libtcod.white
 color_cannons = libtcod.yellow * libtcod.red * 1.5
 
 logg.info('Constants initialization finished.')
@@ -127,7 +129,7 @@ class Gamestate():
 
         logg.debug('Main console initialization.')
         libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT,
-            GAME_TITLE + ' v.' + VERSION, False,
+            WINDOW_TITLE + ' v.' + VERSION, False,
                 renderer = libtcod.RENDERER_SDL)
         logg.debug('Setting the FPS limit.')
         libtcod.sys_set_fps(LIMIT_FPS)
@@ -144,6 +146,8 @@ class Gamestate():
         self.gamestate = ""
         self.player_action = None
         self.map = None
+        self.random = libtcod.random_new()
+        self.score = 0
 
     def main_menu(self):
         """THE main menu, no other."""
@@ -153,18 +157,21 @@ class Gamestate():
     def new_game(self):
         """Reset variables and go!"""
         self.entities=[]
-        self.player = Entity(5, 5, "Player", "@", color_player, True)
+        self.player = Entity(SCREEN_WIDTH/2, 57, "Player", "@", color_player, False, False)
         self.entities.append(self.player)
         make_map()
+        self.score = 0
         self.gamestate = "playing"
         self.play_game()
 
     def play_game(self):
         """Where's the game @."""
-
-        self.player_action = None
         #Start main loop
         while not libtcod.console_is_window_closed():
+
+            self.player_action = None
+
+            spawn_points()
 
             render_all() #render stuff
             libtcod.console_flush() #refresh the console
@@ -185,27 +192,36 @@ class Gamestate():
                 for ent in self.entities:
                     if ent.ai:
                         ent.ai.take_turn()
+                        if ent.killer and ent.x == self.player.x and ent.y == self.player.y:
+                            player_death()
+                        elif ent.point and ent.x == self.player.x and ent.y == self.player.y:
+                            self.score += 1
 
 
 logg.debug('Gamestate initialized.')
 
-class Tile():
+class Tile(object):
     """A tile for the map, passable by default."""
     def __init__(self, blocked=False,):
         self.blocked = blocked
 
 logg.debug('Tile initialized.')
 
-class Entity():
+class Entity(object):
     """Any and all entities in the game."""
-    def __init__(self, x, y, name, char, color, blocks=False, ai=False):
+    def __init__(self, x, y, name, char, color, blocks=False, killer=False, point=False, ai=False):
         self.x = x
         self.y = y
         self.name = name
         self.char = char
         self.color = color
         self.blocks = blocks
+        self.killer = killer
+        self.point = point
+        
         self.ai = ai
+        if self.ai: #let AI component know who owns it
+            self.ai.owner = self
 
     def move(self, dx, dy):
         #logg.debug('move() called, %s, %s', dx, dy)
@@ -226,6 +242,41 @@ class Entity():
         libtcod.console_put_char_ex(Game.con, self.x, self.y, ' ', color_ground_f, color_ground_b)
 
 logg.debug('Entity initialized.')
+
+class Cannon(object):
+    """The 'AI' for cannons"""
+    def __init__(self):
+        pass
+
+    def take_turn(self):
+        if libtcod.random_get_int(Game.random, 0, 3) == 0:
+            can = self.owner
+            power = 1
+            ai_component = Lazor(1)
+            laser = Entity(can.x, can.y, "laser", '|', libtcod.red, False, True, ai=ai_component)
+            Game.entities.append(laser)
+
+class Lazor(object):
+    """The lazor 'AI'."""
+    def __init__(self, power):
+        self.power = power
+
+    def take_turn(self):
+        laz = self.owner
+        if laz.y + self.power > MAP_HEIGHT-2:
+            Game.entities.remove(laz)
+        else:
+            laz.move(0,self.power)
+
+class Point(object):
+    """The 'AI' for the point thingies"""
+    def __init__(self, timer):
+        self.timer = timer
+
+    def take_turn(self):
+        self.timer = self.timer - 1
+        if timer == 0:
+            Game.entities.remove(self.owner)
 
 logg.info('Classes initialization finished.')
 
@@ -282,7 +333,8 @@ def make_map():
         Game.map[x][59].blocked = True
 
     for z in range(16):
-        lazor = Entity(z+1, 1, "laz0r", '^', color_cannons, True, ai=None)
+        ai_component = Cannon()
+        lazor = Entity(z+1, 1, "laz0r", '^', color_cannons, True, True, ai=ai_component)
         Game.entities.append(lazor)
 
 def handle_keys():
@@ -307,18 +359,23 @@ def handle_keys():
         #numpad, arrows, vim
         if key.vk == libtcod.KEY_KP8 or key.vk == libtcod.KEY_UP or key_char == 'k':
             Game.player.move(0, -1)
+            return True
 
         elif key.vk == libtcod.KEY_KP2 or key.vk == libtcod.KEY_DOWN or key_char == 'j':
             Game.player.move(0, 1)
+            return True
 
         elif key.vk == libtcod.KEY_KP4 or key.vk == libtcod.KEY_LEFT or key_char == 'h':
             Game.player.move(-1, 0)
+            return True
 
         elif key.vk == libtcod.KEY_KP6 or key.vk == libtcod.KEY_RIGHT or key_char == 'l':
             Game.player.move(1, 0)
+            return True
 
         elif key.vk == libtcod.KEY_KP5 or key.vk == libtcod.KEY_SPACE or key_char == '.': #KP_5, SPACE, . - wait a turn
             Game.player.move(0, 0)
+            return True
 
         else:
             #test for other keys
@@ -333,6 +390,18 @@ def handle_keys():
             return 'didnt-take-turn' #This makes sure that monsters don't take turn if player did not.
 
 logg.debug('handle_keys()')
+
+def spawn_points():
+    pass
+
+logg.debug('spawn_points()')
+
+def player_death():
+    Game.player.char = '%'
+    Game.player.color = color_player_dead
+    Game.gamestate = 'death'
+
+logg.debug('player_death()')
 
 #function that checks if the tile is blocked
 def is_blocked(x, y):
