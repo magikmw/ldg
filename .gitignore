@@ -2,5 +2,4 @@
 *.pyo
 *.log
 *.log_old
-*.png
-notes
+screen*.png
