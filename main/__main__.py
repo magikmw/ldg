@@ -112,6 +112,8 @@ color_point = libtcod.gold
 color_laser_1 = libtcod.red
 color_laser_2 = libtcod.blue
 color_laser_3 = libtcod.green
+color_menu_text = libtcod.lighter_grey * 1.5
+color_menu_highlight_b = libtcod.darker_grey
 
 logg.info('Constants initialization finished.')
 
@@ -158,15 +160,43 @@ class Gamestate():
         """THE main menu, no other."""
         LIMIT_FPS = 20
         libtcod.sys_set_fps(LIMIT_FPS)
-        
-        print "I'm a main menu yay \o/"
 
-        self.new_game('RT')
+        img = libtcod.image_load('main/lazor.png')
+
+        while not libtcod.console_is_window_closed():
+            #show the background image, at twice the regular console resolution
+            libtcod.image_blit_2x(img, 0, 0, 0)
+
+            #show the game's title, and credits
+            libtcod.console_set_default_foreground(0, color_menu_text)
+            libtcod.console_print_ex(0, SCREEN_WIDTH/2, 1, libtcod.BKGND_NONE, libtcod.CENTER, 'Laz0r Dodging Game')
+            libtcod.console_print_ex(0, SCREEN_WIDTH/2, 2, libtcod.BKGND_NONE, libtcod.CENTER, 'by magikmw')
+
+            #show options and wait for the player's choice
+            choice = menu('Choose an option:\n', ['Real-Time', 'Turn-Based', 'Help', 'Quit.'], 18, -10)
+
+            if choice == 0: #new game
+                self.new_game('RT')
+            if choice == 1:
+                self.new_game('TB')
+            if choice == 2:
+                #TODO help screen funcion call here
+                pass
+            if choice == 3: #quit
+                break
+
+            #libtcod.console_flush() #clear the console before redraw (fixes blacking out issue?)
+
+        #self.new_game('RT')
 
     def new_game(self, gamemode):
         """Reset variables and go!"""
         self.entities=[]
-        self.player = Entity(SCREEN_WIDTH/2, 57, "Player", "@", color_player, False, False)
+        if libtcod.random_get_int(Game.random, 0, 1) == 1:
+            x = SCREEN_WIDTH/2
+        else:
+            x = SCREEN_WIDTH/2 - 1
+        self.player = Entity(x, 57, "Player", "@", color_player, False, False)
         self.entities.append(self.player)
         make_map()
         self.score = 0
@@ -271,21 +301,26 @@ class Cannon(object):
 
     def take_turn(self):
         if Game.gamemode == 'RT':
-            spawn_chance = libtcod.random_get_int(Game.random, 0, 20)
-            power = 1
+            power = libtcod.random_get_int(Game.random, 0, 20)
+            color_laser = color_laser_1
         else:
-            spawn_chance = libtcod.random_get_int(Game.random, 0, 3)
-            power = libtcod.random_get_int(Game.random, 1, 3)
-        if spawn_chance == 0:
-            can = self.owner
-            if power == 1:
-                color_laser = color_laser_1
-            elif power == 2:
-                color_laser = color_laser_2
-            elif power == 3:
+            d100 = libtcod.random_get_int(Game.random, 0, 100)
+            if d100 < 10:
+                power = 3
                 color_laser = color_laser_3
+            elif d100 < 10+10:
+                power = 2
+                color_laser = color_laser_2
+            elif d100 < 10+10+30:
+                power = libtcod.random_get_int(Game.random, 0, 1)
+                color_laser = color_laser_1
+            else:
+                power = 0
+
+        if power > 0 and power <= 3:
+            can = self.owner
             ai_component = Lazor(power)
-            laser = Entity(can.x, can.y, "laser", '|', color_laser, False, True, ai=ai_component)
+            laser = Entity(can.x, can.y+1, "laser", '|', color_laser, False, True, ai=ai_component)
             Game.entities.append(laser)
 
 class Lazor(object):
@@ -432,7 +467,8 @@ def spawn_points():
     if libtcod.random_get_int(Game.random, 0, 1) == 1:
         x = libtcod.random_get_int(Game.random, 1, 16)
         y = libtcod.random_get_int(Game.random, 2, 55)
-        t = libtcod.random_get_int(Game.random, 20, 60)
+        #t = libtcod.random_get_int(Game.random, 20, 60)
+        t = 60
 
         ai_component = Point(t)
         point = Entity(x, y, 'point', '*', color_point, False, False, True, ai=ai_component)
@@ -468,6 +504,100 @@ def is_blocked(x, y):
 
 logg.debug('is_blocked()')
 
+def menu(header, options, width, offset=0):
+    """Generic menu function"""
+    if len(options) > 26: raise ValueError('Cannot have a menu with more than 26 options.')
+
+    #calculate total height for the header (auto-wraped), and one line per option
+    header_height = libtcod.console_get_height_rect(Game.con, 0, 0, width, SCREEN_HEIGHT, header)
+    if header == '':
+        header_height = 0
+    height = len(options) + header_height
+
+    highlight = ord('a')
+
+    while True:
+        #creates an off-screen console that represents the menu's window
+        window = libtcod.console_new(width, height)
+
+        #print the header with auto-wrap
+        libtcod.console_set_default_foreground(window, color_menu_text)
+        libtcod.console_print_rect_ex(window, 0, 0, width, height, libtcod.BKGND_NONE, libtcod.LEFT, header)
+        libtcod.console_set_default_background(window, color_menu_highlight_b)
+
+        #print the menu's options
+        y = header_height
+        letter_index = ord('a')
+        for option_text in options:
+            text = '(' + chr(letter_index) + ') ' + option_text
+            if not highlight == letter_index:
+                libtcod.console_print_ex(window, 0, y, libtcod.BKGND_NONE, libtcod.LEFT, text)
+            else:
+                libtcod.console_print_ex(window, 0, y, libtcod.BKGND_SET, libtcod.LEFT, text)
+            y += 1
+            letter_index +=1
+
+        #blit "window" contents to the root console
+        x = SCREEN_WIDTH/2 - width/2
+        y = SCREEN_HEIGHT/2 - height/2 + offset
+        libtcod.console_blit(window, 0, 0, width, height, 0, x, y, 1.0, 0.7)
+
+        #present the console, and wait for a key-press
+        libtcod.console_flush()
+
+        mouse = libtcod.Mouse()
+        key = libtcod.Key()
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
+
+        mouse_move = abs(mouse.dy) + abs(mouse.dx)
+
+        if mouse_move > 2:
+            if header_height != 0 and mouse.cy > y and mouse.cy < y+height:
+                highlight = ord('a') + mouse.cy - y - header_height
+            else:
+                highlight = ord('a') + mouse.cy - y
+
+            if highlight < ord('a'):
+                highlight = ord('a')
+            elif highlight > letter_index - 1:
+                highlight = letter_index -1
+
+
+        if mouse.lbutton_pressed:
+            index = highlight - ord('a')
+            if index >= 0 and index < len(options): return index
+
+        if chr(key.c) == "P":
+            libtcod.sys_save_screenshot()
+
+        if key.vk == libtcod.KEY_F11:
+            libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+
+        if key.vk == libtcod.KEY_ESCAPE:
+            #XXX WTF I do with that.
+            pass
+
+        if key.vk == libtcod.KEY_ENTER or key.vk == libtcod.KEY_KPENTER or key.vk == libtcod.KEY_SPACE:
+            index = highlight - ord('a')
+            if index >= 0 and index < len(options): return index
+
+        if key.vk == libtcod.KEY_DOWN or key.vk == libtcod.KEY_KP2 or chr(key.c) == 'k':
+            if not highlight == letter_index -1:
+                highlight += 1
+
+        elif key.vk == libtcod.KEY_UP or key.vk == libtcod.KEY_KP8 or chr(key.c) == 'j':
+            if not highlight == ord('a'):
+                highlight -= 1
+
+        #convert ASCII code to an index; if it corresponds to an option - return that
+        index = key.c - ord('a')
+        if index >= 0 and index < len(options): return index
+
+    print(index)
+    return index
+
+logg.debug('menu()')    
+    
 def help_screen():
     print "This is the halp screen."
 
