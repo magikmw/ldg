@@ -82,10 +82,9 @@ logg.info('Constants initialization.')
 #tile
 WINDOW_TITLE = 'LDG'
 GAME_TITLE = 'Laz0r Dodging Game'
-VERSION = '0.1'
+VERSION = '0.2'
 
 #DEBUG
-DEBUG_GAMEMODE = 'RT'
 
 #FPS maximum
 LIMIT_FPS = 20
@@ -153,19 +152,30 @@ class Gamestate():
         self.map = None
         self.random = libtcod.random_new()
         self.score = 0
+        self.gamemode = ''
 
     def main_menu(self):
         """THE main menu, no other."""
+        LIMIT_FPS = 20
+        libtcod.sys_set_fps(LIMIT_FPS)
+        
         print "I'm a main menu yay \o/"
-        self.new_game()
 
-    def new_game(self):
+        self.new_game('RT')
+
+    def new_game(self, gamemode):
         """Reset variables and go!"""
         self.entities=[]
         self.player = Entity(SCREEN_WIDTH/2, 57, "Player", "@", color_player, False, False)
         self.entities.append(self.player)
         make_map()
         self.score = 0
+        self.gamemode = gamemode
+        if Game.gamemode == 'RT':
+            LIMIT_FPS = 10
+        else:
+            LIMIT_FPS = 20
+        libtcod.sys_set_fps(LIMIT_FPS)
         self.gamestate = "playing"
         self.play_game()
 
@@ -191,7 +201,7 @@ class Gamestate():
                 break
 
             #'AI' takes turns
-            if self.gamestate == 'playing' and self.player_action != 'didnt-take-turn':
+            if self.gamestate == 'playing' and self.player_action != 'didnt-take-turn' or Game.gamemode == 'RT':
                 for ent in self.entities:
                     if ent.ai:
                         ent.ai.take_turn()
@@ -202,8 +212,6 @@ class Gamestate():
                             ent.clear()
                             Game.entities.remove(ent)
                 spawn_points()
-
-
 
 logg.debug('Gamestate initialized.')
 
@@ -262,9 +270,14 @@ class Cannon(object):
         pass
 
     def take_turn(self):
-        if libtcod.random_get_int(Game.random, 0, 3) == 0:
-            can = self.owner
+        if Game.gamemode == 'RT':
+            spawn_chance = libtcod.random_get_int(Game.random, 0, 20)
+            power = 1
+        else:
+            spawn_chance = libtcod.random_get_int(Game.random, 0, 3)
             power = libtcod.random_get_int(Game.random, 1, 3)
+        if spawn_chance == 0:
+            can = self.owner
             if power == 1:
                 color_laser = color_laser_1
             elif power == 2:
@@ -279,13 +292,18 @@ class Lazor(object):
     """The lazor 'AI'."""
     def __init__(self, power):
         self.power = power
+        self.tick = 4
 
     def take_turn(self):
+        if self.tick == -1:
+            self.tick = 2
         laz = self.owner
         if laz.y + self.power > MAP_HEIGHT-2:
             Game.entities.remove(laz)
-        else:
+        elif self.tick == 0:
             laz.move(0,self.power)
+
+        self.tick -= 1
 
 class Point(object):
     """The 'AI' for the point thingies"""
