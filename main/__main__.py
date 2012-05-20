@@ -85,6 +85,7 @@ GAME_TITLE = 'Laz0r Dodging Game'
 VERSION = '0.1'
 
 #DEBUG
+DEBUG_GAMEMODE = 'RT'
 
 #FPS maximum
 LIMIT_FPS = 20
@@ -108,6 +109,10 @@ color_wall_b = libtcod.grey * 0.3
 color_player = libtcod.green
 color_player_dead = libtcod.white
 color_cannons = libtcod.yellow * libtcod.red * 1.5
+color_point = libtcod.gold
+color_laser_1 = libtcod.red
+color_laser_2 = libtcod.blue
+color_laser_3 = libtcod.green
 
 logg.info('Constants initialization finished.')
 
@@ -171,8 +176,6 @@ class Gamestate():
 
             self.player_action = None
 
-            spawn_points()
-
             render_all() #render stuff
             libtcod.console_flush() #refresh the console
 
@@ -187,7 +190,7 @@ class Gamestate():
             if self.player_action == 'exit': #if pressing a key returns 'exit' - close the window
                 break
 
-            #let monsters take their turn
+            #'AI' takes turns
             if self.gamestate == 'playing' and self.player_action != 'didnt-take-turn':
                 for ent in self.entities:
                     if ent.ai:
@@ -196,6 +199,10 @@ class Gamestate():
                             player_death()
                         elif ent.point and ent.x == self.player.x and ent.y == self.player.y:
                             self.score += 1
+                            ent.clear()
+                            Game.entities.remove(ent)
+                spawn_points()
+
 
 
 logg.debug('Gamestate initialized.')
@@ -241,6 +248,12 @@ class Entity(object):
         #logg.debug('Method clear() called by %s, pos x: %s, y: %s', self.name, str(self.x), str(self.y))
         libtcod.console_put_char_ex(Game.con, self.x, self.y, ' ', color_ground_f, color_ground_b)
 
+    def send_to_back(self):
+        #logg.debug('send_to_back() called')
+        #make this obcject drawn first so it appears beneath everything else
+        Game.entities.remove(self)
+        Game.entities.insert(0, self)    
+
 logg.debug('Entity initialized.')
 
 class Cannon(object):
@@ -251,9 +264,15 @@ class Cannon(object):
     def take_turn(self):
         if libtcod.random_get_int(Game.random, 0, 3) == 0:
             can = self.owner
-            power = 1
-            ai_component = Lazor(1)
-            laser = Entity(can.x, can.y, "laser", '|', libtcod.red, False, True, ai=ai_component)
+            power = libtcod.random_get_int(Game.random, 1, 3)
+            if power == 1:
+                color_laser = color_laser_1
+            elif power == 2:
+                color_laser = color_laser_2
+            elif power == 3:
+                color_laser = color_laser_3
+            ai_component = Lazor(power)
+            laser = Entity(can.x, can.y, "laser", '|', color_laser, False, True, ai=ai_component)
             Game.entities.append(laser)
 
 class Lazor(object):
@@ -275,7 +294,7 @@ class Point(object):
 
     def take_turn(self):
         self.timer = self.timer - 1
-        if timer == 0:
+        if self.timer == 0:
             Game.entities.remove(self.owner)
 
 logg.info('Classes initialization finished.')
@@ -312,7 +331,7 @@ def render_all():
     libtcod.console_blit(Game.top_panel, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 
     libtcod.console_print_ex(Game.bottom_panel, SCREEN_WIDTH/2, 0, libtcod.BKGND_NONE, libtcod.CENTER, "Stage 14")
-    libtcod.console_print_ex(Game.bottom_panel, 0, 1, libtcod.BKGND_NONE, libtcod.LEFT, "Magikmw: " + "3000 pts")
+    libtcod.console_print_ex(Game.bottom_panel, 0, 1, libtcod.BKGND_NONE, libtcod.LEFT, "Magikmw: " + str(Game.score) + 'pts')
 
     libtcod.console_blit(Game.bottom_panel, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, MAP_HEIGHT+2)
 
@@ -392,7 +411,15 @@ def handle_keys():
 logg.debug('handle_keys()')
 
 def spawn_points():
-    pass
+    if libtcod.random_get_int(Game.random, 0, 1) == 1:
+        x = libtcod.random_get_int(Game.random, 1, 16)
+        y = libtcod.random_get_int(Game.random, 2, 55)
+        t = libtcod.random_get_int(Game.random, 20, 60)
+
+        ai_component = Point(t)
+        point = Entity(x, y, 'point', '*', color_point, False, False, True, ai=ai_component)
+        Game.entities.append(point)
+        point.send_to_back()
 
 logg.debug('spawn_points()')
 
