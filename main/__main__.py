@@ -173,16 +173,19 @@ class Gamestate():
             libtcod.console_print_ex(0, SCREEN_WIDTH/2, 2, libtcod.BKGND_NONE, libtcod.CENTER, 'by magikmw')
 
             #show options and wait for the player's choice
-            choice = menu('Choose an option:\n', ['Real-Time', 'Turn-Based', 'Help', 'Quit.'], 18, -10)
+            choice = menu('Choose an option:\n', ['Real-Time', 'Turn-Based', 'Highscores', 'Help', 'Quit.'], 18, -10)
 
             if choice == 0: #new game
                 self.new_game('RT')
             if choice == 1:
                 self.new_game('TB')
             if choice == 2:
+                #TODO the highscore function call here
+                pass
+            if choice == 3:
                 #TODO help screen funcion call here
                 pass
-            if choice == 3: #quit
+            if choice == 4: #quit
                 break
 
             #libtcod.console_flush() #clear the console before redraw (fixes blacking out issue?)
