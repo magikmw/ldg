@@ -1,7 +1,7 @@
 #! /bin/bash
 
 #remove log files if present
-find . -name \*.log -exec mv {} ldg.log_old \;
+find . -name *.log -exec mv {} ldg.log_old \;
 
 #check for arguments to pass
 ARG=$1
