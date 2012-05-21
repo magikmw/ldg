@@ -9,6 +9,8 @@ ARG=$1
 #execute the main python module, pass the arguments
 #check if there is python2 - if not, try python
 command -v python2 >/dev/null 2>&1 || { python main $ARG; }
+mypath=`realpath $0`
+cd `dirname $mypath`
 python2 main $ARG
 
 #after execution, remove compiled .pyc files
